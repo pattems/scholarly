@@ -190,13 +190,14 @@ class ProxyGenerator(object):
         :returns: whether or not the proxy was set up successfully
         :rtype: {bool}
         """
-        # Reformat proxy for HTTPX
-        if http[:4] not in ("http", "sock"):
+        # Reformat proxy for HTTPX. Only add a scheme when none is given, so
+        # that an http:// proxy for https and socks5:// proxies are kept as is.
+        if "://" not in http:
             http = "http://" + http
         if https is None:
             https = http
-        elif https[:5] not in ("https", "socks"):
-            https = "https://" + https
+        elif "://" not in https:
+            https = "http://" + https
 
         proxies = {'http://': http, 'https://': https}
         if self.proxy_mode == ProxyMode.SCRAPERAPI:

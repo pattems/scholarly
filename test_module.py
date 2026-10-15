@@ -892,5 +892,33 @@ class TestScholarlyWithProxy(unittest.TestCase):
         top10_citations = [citation for num, citation in enumerate(scholarly.citedby(pub)) if num<10]
         self.assertEqual(len(top10_citations), 10)
 
+
+class TestProxyGeneratorOffline(unittest.TestCase):
+    """Tests of the proxy setup that do not need network access."""
+
+    def setUp(self):
+        self.pg = ProxyGenerator()
+        self.pg._check_proxy = lambda proxies: True
+        self.pg._new_session = lambda **kwargs: None
+
+    def test_use_proxy_adds_missing_scheme(self):
+        self.assertTrue(self.pg._use_proxy("127.0.0.1:8080"))
+        self.assertEqual(self.pg._proxies, {'http://': "http://127.0.0.1:8080",
+                                            'https://': "http://127.0.0.1:8080"})
+
+        self.pg._use_proxy("127.0.0.1:8080", "127.0.0.1:8443")
+        self.assertEqual(self.pg._proxies, {'http://': "http://127.0.0.1:8080",
+                                            'https://': "http://127.0.0.1:8443"})
+
+    def test_use_proxy_keeps_given_scheme(self):
+        self.pg._use_proxy("http://127.0.0.1:8080", "http://127.0.0.1:8443")
+        self.assertEqual(self.pg._proxies, {'http://': "http://127.0.0.1:8080",
+                                            'https://': "http://127.0.0.1:8443"})
+
+        self.pg._use_proxy("socks5://127.0.0.1:9050")
+        self.assertEqual(self.pg._proxies, {'http://': "socks5://127.0.0.1:9050",
+                                            'https://': "socks5://127.0.0.1:9050"})
+
+
 if __name__ == '__main__':
     unittest.main()
