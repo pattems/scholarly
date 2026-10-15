@@ -11,6 +11,7 @@ import csv
 import requests
 from bs4 import BeautifulSoup
 from contextlib import contextmanager
+from unittest import mock
 try:
     import pandas as pd
 except ImportError:
@@ -918,6 +919,48 @@ class TestProxyGeneratorOffline(unittest.TestCase):
         self.pg._use_proxy("socks5://127.0.0.1:9050")
         self.assertEqual(self.pg._proxies, {'http://': "socks5://127.0.0.1:9050",
                                             'https://': "socks5://127.0.0.1:9050"})
+
+
+    def _webdriver(self, browser, proxies=None, driver_path=None):
+        if proxies:
+            self.pg._proxy_works = True
+            self.pg._proxies = proxies
+        with mock.patch("selenium.webdriver." + browser) as driver_class,                 mock.patch("shutil.which", return_value=driver_path):
+            getattr(self.pg, "_get_%s_webdriver" % browser.lower())()
+        driver_class.return_value.get.assert_called_once_with("https://scholar.google.com")
+        args, kwargs = driver_class.call_args
+        self.assertEqual(args, ())
+        return kwargs
+
+    def test_chrome_webdriver(self):
+        kwargs = self._webdriver("Chrome")
+        self.assertNotIn("service", kwargs)
+        self.assertEqual(kwargs["options"].arguments, ["--headless"])
+
+    def test_chrome_webdriver_proxy(self):
+        kwargs = self._webdriver("Chrome", {'http://': "http://127.0.0.1:8080",
+                                            'https://': "http://127.0.0.1:8080"},
+                                 driver_path="/usr/local/bin/chromedriver")
+        self.assertEqual(kwargs["service"].path, "/usr/local/bin/chromedriver")
+        self.assertIn("--proxy-server=http=http://127.0.0.1:8080;https=http://127.0.0.1:8080",
+                      kwargs["options"].arguments)
+
+    def test_firefox_webdriver_proxy(self):
+        kwargs = self._webdriver("Firefox", {'http://': "http://127.0.0.1:8080",
+                                             'https://': "http://127.0.0.1:8443"},
+                                 driver_path="/usr/local/bin/geckodriver")
+        self.assertEqual(kwargs["service"].path, "/usr/local/bin/geckodriver")
+        proxy = kwargs["options"].proxy
+        self.assertEqual(proxy.http_proxy, "127.0.0.1:8080")
+        self.assertEqual(proxy.ssl_proxy, "127.0.0.1:8443")
+
+    def test_firefox_webdriver_socks_proxy(self):
+        kwargs = self._webdriver("Firefox", {'http://': "socks5://127.0.0.1:9050",
+                                             'https://': "socks5://127.0.0.1:9050"})
+        self.assertNotIn("service", kwargs)
+        proxy = kwargs["options"].proxy
+        self.assertEqual(proxy.socks_proxy, "127.0.0.1:9050")
+        self.assertEqual(proxy.socks_version, 5)
 
 
 if __name__ == '__main__':
